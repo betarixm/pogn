@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1771571494668,
+      "tag": "0000_wild_korvac",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1771578745217,
+      "tag": "0001_gifted_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771770132928,
+      "tag": "0002_far_ben_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1740182400000,
+      "tag": "0003_posts_fts",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1771777498918,
+      "tag": "0004_goofy_betty_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1771780800000,
+      "tag": "0005_twitter_style",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1740355200000,
+      "tag": "0006_add_avatar_object_key",
+      "breakpoints": true
+    }
+  ]
+}

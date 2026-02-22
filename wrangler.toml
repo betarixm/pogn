@@ -1,0 +1,36 @@
+name = "pogn"
+main = ".open-next/worker.js"
+compatibility_date = "2026-02-20"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[routes]]
+pattern = "pogn.today"
+zone_name = "pogn.today"
+custom_domain = true
+
+
+[observability.logs]
+enabled = true
+
+[vars]
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "pogn"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pogn"
+database_id = "1151af52-56fe-49a8-b2ae-6aca2344d5ba"
+migrations_dir = "database/migrations"
+
+[[r2_buckets]]
+binding = "AVATARS"
+bucket_name = "pogn-avatars"
+
+[[r2_buckets]]
+binding = "NEXT_INC_CACHE_R2_BUCKET"
+bucket_name = "pogn"
