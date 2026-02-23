@@ -42,7 +42,7 @@ const HeartButtonFloat = ({
       type="button"
       onClick={handleClick}
       disabled={isPending}
-      className="glass pointer-events-auto flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-rose-400/40 bg-rose-500/85 px-4 py-3 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-rose-500/95 disabled:cursor-not-allowed dark:border-rose-500/30 dark:bg-rose-700/75 dark:hover:bg-rose-700/90"
+      className="glass pointer-events-auto flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/85 px-4 py-3 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-rose-500/95 disabled:cursor-not-allowed bg-rose-700/75 hover:bg-rose-700/90"
     >
       <Heart
         className={`h-4 w-4 transition-all ${optimistic.isHearted ? "fill-current text-white" : "text-white/90"}`}

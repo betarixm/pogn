@@ -284,6 +284,79 @@ describe("getPostById", () => {
     ]);
   });
 
+  test("for unauthenticated user, includes only public replies", async () => {
+    const user = seedUser(database);
+    const parent = seedPost(database, user.id, { id: createPostId("post-1") });
+    const baseTime = 1_700_000_000_000;
+
+    seedPost(database, user.id, {
+      id: createPostId("reply-public"),
+      content: "Public reply",
+      latitude: null,
+      longitude: null,
+      parentId: parent.id,
+      visibility: "public",
+      createdAt: baseTime + 1000,
+      updatedAt: baseTime + 1000,
+    });
+    seedPost(database, user.id, {
+      id: createPostId("reply-members"),
+      content: "Members reply",
+      latitude: null,
+      longitude: null,
+      parentId: parent.id,
+      visibility: "members",
+      createdAt: baseTime + 2000,
+      updatedAt: baseTime + 2000,
+    });
+
+    const result = await getPostById(
+      asAppDatabase(database),
+      createPostId("post-1"),
+      null,
+    );
+
+    expect(result!.replies.map((reply) => reply.content)).toEqual(["Public reply"]);
+  });
+
+  test("for authenticated user, includes non-public replies", async () => {
+    const user = seedUser(database);
+    const parent = seedPost(database, user.id, { id: createPostId("post-1") });
+    const baseTime = 1_700_000_000_000;
+
+    seedPost(database, user.id, {
+      id: createPostId("reply-public"),
+      content: "Public reply",
+      latitude: null,
+      longitude: null,
+      parentId: parent.id,
+      visibility: "public",
+      createdAt: baseTime + 1000,
+      updatedAt: baseTime + 1000,
+    });
+    seedPost(database, user.id, {
+      id: createPostId("reply-members"),
+      content: "Members reply",
+      latitude: null,
+      longitude: null,
+      parentId: parent.id,
+      visibility: "members",
+      createdAt: baseTime + 2000,
+      updatedAt: baseTime + 2000,
+    });
+
+    const result = await getPostById(
+      asAppDatabase(database),
+      createPostId("post-1"),
+      user.id,
+    );
+
+    expect(result!.replies.map((reply) => reply.content)).toEqual([
+      "Public reply",
+      "Members reply",
+    ]);
+  });
+
   test("returns attachments in displayOrder ascending order", async () => {
     const user = seedUser(database);
     seedPost(database, user.id);
@@ -574,6 +647,81 @@ describe("getPostThread", () => {
 
     expect(result.ancestors.map((a) => a.content)).toEqual(["Root", "Child"]);
     expect(result.descendants).toHaveLength(0);
+  });
+
+  test("for unauthenticated user, excludes non-public ancestors", async () => {
+    const user = seedUser(database);
+    const baseTime = 1_700_000_000_000;
+    seedPost(database, user.id, {
+      id: createPostId("root"),
+      content: "Members Root",
+      visibility: "members",
+      createdAt: baseTime,
+      updatedAt: baseTime,
+    });
+    seedPost(database, user.id, {
+      id: createPostId("child"),
+      parentId: createPostId("root"),
+      latitude: null,
+      longitude: null,
+      content: "Public Child",
+      visibility: "public",
+      createdAt: baseTime + 1000,
+      updatedAt: baseTime + 1000,
+    });
+    seedPost(database, user.id, {
+      id: createPostId("grandchild"),
+      parentId: createPostId("child"),
+      latitude: null,
+      longitude: null,
+      content: "Public Grandchild",
+      visibility: "public",
+      createdAt: baseTime + 2000,
+      updatedAt: baseTime + 2000,
+    });
+
+    const result = await getPostThread(asAppDatabase(database), createPostId("grandchild"), false);
+
+    expect(result.ancestors.map((ancestor) => ancestor.content)).toEqual(["Public Child"]);
+  });
+
+  test("for authenticated user, includes non-public ancestors", async () => {
+    const user = seedUser(database);
+    const baseTime = 1_700_000_000_000;
+    seedPost(database, user.id, {
+      id: createPostId("root"),
+      content: "Members Root",
+      visibility: "members",
+      createdAt: baseTime,
+      updatedAt: baseTime,
+    });
+    seedPost(database, user.id, {
+      id: createPostId("child"),
+      parentId: createPostId("root"),
+      latitude: null,
+      longitude: null,
+      content: "Public Child",
+      visibility: "public",
+      createdAt: baseTime + 1000,
+      updatedAt: baseTime + 1000,
+    });
+    seedPost(database, user.id, {
+      id: createPostId("grandchild"),
+      parentId: createPostId("child"),
+      latitude: null,
+      longitude: null,
+      content: "Public Grandchild",
+      visibility: "public",
+      createdAt: baseTime + 2000,
+      updatedAt: baseTime + 2000,
+    });
+
+    const result = await getPostThread(asAppDatabase(database), createPostId("grandchild"), true);
+
+    expect(result.ancestors.map((ancestor) => ancestor.content)).toEqual([
+      "Members Root",
+      "Public Child",
+    ]);
   });
 
   test("excludes soft-deleted descendants", async () => {

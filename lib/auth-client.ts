@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
+import { resolveAuthBaseUrl } from "@/lib/auth-base-url";
 
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  baseURL: resolveAuthBaseUrl(),
 });

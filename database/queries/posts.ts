@@ -183,6 +183,17 @@ export const getPostById = async (
         .get()
     : undefined;
 
+  const replyVisibilityCondition = userId !== null
+    ? and(
+        eq(schema.posts.parentId, postId),
+        isNull(schema.posts.deletedAt),
+      )
+    : and(
+        eq(schema.posts.parentId, postId),
+        isNull(schema.posts.deletedAt),
+        eq(schema.posts.visibility, "public"),
+      );
+
   const replyRows = await database
     .select({
       id: schema.posts.id,
@@ -193,12 +204,7 @@ export const getPostById = async (
       authorAvatarObjectKey: schema.users.avatarObjectKey,
     })
     .from(schema.posts)
-    .where(
-      and(
-        eq(schema.posts.parentId, postId),
-        isNull(schema.posts.deletedAt),
-      ),
-    )
+    .where(replyVisibilityCondition)
     .innerJoin(schema.users, eq(schema.posts.authorId, schema.users.id))
     .orderBy(asc(schema.posts.createdAt))
     .all();
@@ -290,6 +296,14 @@ export const getPostThread = async (
   // Fetch ancestor data preserving root-first order
   let ancestors: AncestorPost[] = [];
   if (ancestorIds.length > 0) {
+    const ancestorVisibilityCondition = isAuthenticated
+      ? and(inArray(schema.posts.id, ancestorIds), isNull(schema.posts.deletedAt))
+      : and(
+          inArray(schema.posts.id, ancestorIds),
+          isNull(schema.posts.deletedAt),
+          eq(schema.posts.visibility, "public"),
+        );
+
     const ancestorRows = await database
       .select({
         id: schema.posts.id,
@@ -300,7 +314,7 @@ export const getPostThread = async (
         authorAvatarObjectKey: schema.users.avatarObjectKey,
       })
       .from(schema.posts)
-      .where(inArray(schema.posts.id, ancestorIds))
+      .where(ancestorVisibilityCondition)
       .innerJoin(schema.users, eq(schema.posts.authorId, schema.users.id))
       .all();
     const ancestorMap = new Map(ancestorRows.map((r) => [r.id, r]));

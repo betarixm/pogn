@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { motion, useReducedMotion } from "motion/react";
+import Avatar from "@/app/components/avatar";
 
 type UserMenuProps = {
   username: string;
@@ -9,22 +11,30 @@ type UserMenuProps = {
 };
 
 const UserMenu = ({ username, userId, avatarObjectKey }: UserMenuProps): React.ReactElement => {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
-    <Link
+    <motion.div
+      whileHover={prefersReducedMotion ? undefined : { scale: 1.06, y: -1.5 }}
+      whileTap={prefersReducedMotion ? undefined : { scale: 0.95 }}
+      transition={
+        prefersReducedMotion
+          ? undefined
+          : { type: "spring", stiffness: 420, damping: 28, mass: 0.6 }
+      }
+    >
+      <Link
       href={`/${userId}`}
       aria-label="내 프로필"
       className="block h-8 w-8 overflow-hidden rounded-full transition-opacity hover:opacity-85"
-    >
-      <img
-        src={
-          avatarObjectKey
-            ? `/api/avatar?key=${encodeURIComponent(avatarObjectKey)}`
-            : "/default-avatar.png"
-        }
-        alt={username}
-        className="h-full w-full object-cover"
-      />
-    </Link>
+      >
+        <Avatar
+          avatarObjectKey={avatarObjectKey}
+          alt={username}
+          className="h-full w-full object-cover"
+        />
+      </Link>
+    </motion.div>
   );
 };
 

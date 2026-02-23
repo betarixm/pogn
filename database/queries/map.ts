@@ -1,4 +1,4 @@
-import { eq, isNull, and, asc, desc, count, inArray } from "drizzle-orm";
+import { eq, gt, isNull, and, asc, desc, count, inArray } from "drizzle-orm";
 import type { AppDatabase } from "@/database/client";
 import type { PostId, LayerId, UserId, AttachmentId, PostVisibility } from "@/database/types";
 import { generateLayerId } from "@/database/types";
@@ -29,6 +29,11 @@ export type Layer = {
   id: LayerId;
   name: string;
   description: string;
+};
+
+export type FeedHead = {
+  id: PostId;
+  createdAt: number;
 };
 
 export const getPostsWithLocation = async (
@@ -201,4 +206,50 @@ export const findOrCreateLayerByName = async (
     updatedAt: now,
   });
   return id;
+};
+
+export const getFeedHead = async (
+  database: AppDatabase,
+): Promise<FeedHead | null> => {
+  const row = await database
+    .select({
+      id: schema.posts.id,
+      createdAt: schema.posts.createdAt,
+    })
+    .from(schema.posts)
+    .where(
+      and(
+        isNull(schema.posts.deletedAt),
+        isNull(schema.posts.parentId),
+      ),
+    )
+    .orderBy(desc(schema.posts.createdAt))
+    .limit(1)
+    .get();
+
+  if (row === undefined) return null;
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+  };
+};
+
+export const countNewTopLevelPostsSince = async (
+  database: AppDatabase,
+  createdAtExclusive: number,
+): Promise<number> => {
+  const row = await database
+    .select({ value: count() })
+    .from(schema.posts)
+    .where(
+      and(
+        isNull(schema.posts.deletedAt),
+        isNull(schema.posts.parentId),
+        gt(schema.posts.createdAt, createdAtExclusive),
+      ),
+    )
+    .get();
+
+  if (row === undefined) return 0;
+  return row.value;
 };

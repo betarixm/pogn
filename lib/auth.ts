@@ -5,12 +5,13 @@ import { headers } from "next/headers";
 import { createDatabaseClient } from "@/database/client";
 import type { AppDatabase } from "@/database/client";
 import * as schema from "@/database/schema";
-import { createUserId } from "@/database/types";
+import { createUserId, generateUserId } from "@/database/types";
+import { resolveAuthBaseUrl } from "@/lib/auth-base-url";
 
 const createAuth = (database: AppDatabase) =>
   betterAuth({
     secret: process.env.BETTER_AUTH_SECRET!,
-    baseURL: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+    baseURL: resolveAuthBaseUrl(),
     database: drizzleAdapter(database, {
       provider: "sqlite",
       schema: {
@@ -34,6 +35,15 @@ const createAuth = (database: AppDatabase) =>
         clientId: process.env.MICROSOFT_CLIENT_ID!,
         clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
         tenantId: process.env.MICROSOFT_TENANT_ID!,
+      },
+    },
+    advanced: {
+      generateId: ({ model }) => {
+        if (model === "user") {
+          return generateUserId();
+        }
+
+        return crypto.randomUUID();
       },
     },
     databaseHooks: {

@@ -1,19 +1,23 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { useParams } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
+import { useParams, useRouter } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import dynamic from "next/dynamic";
 import type { MapPost, Layer } from "@/database/queries/map";
 import type { LayerId, PostId } from "@/database/types";
 import type { MapBounds } from "@/app/posts/types";
 import type { PickedLocation, MapInsets } from "@/app/components/post-map";
-import { PenLine, LogIn } from "lucide-react";
+import { PenLine, LogIn, RefreshCw } from "lucide-react";
 import { searchPostIds } from "@/app/actions/posts";
 import PostList from "@/app/components/post-list";
 import UserMenu from "@/app/components/user-menu";
 import SearchBar from "@/app/components/search-bar";
 import WritePostPanel from "@/app/components/write-post-panel";
+import {
+  buildLayerFilterHash,
+  parseActiveLayerIdsFromHash,
+} from "@/app/posts/layer-filter-hash";
 
 const PostMap = dynamic(() => import("@/app/components/post-map"), { ssr: false });
 
@@ -22,30 +26,84 @@ const PostMap = dynamic(() => import("@/app/components/post-map"), { ssr: false 
 const PANEL_BOTTOM_DEFAULT = 12;
 const PANEL_BOTTOM_FILTERED = 53;
 const FILTER_BANNER_HEIGHT = PANEL_BOTTOM_FILTERED - PANEL_BOTTOM_DEFAULT;
+const DETAIL_PANEL_BOTTOM_DEFAULT = 8;
+const DETAIL_PANEL_BOTTOM_FILTERED =
+  DETAIL_PANEL_BOTTOM_DEFAULT + FILTER_BANNER_HEIGHT;
 // Tailwind md breakpoint (px)
 const MD_BREAKPOINT = 768;
 // Desktop sidebar: inset-x-3 (12px) + w-80 (320px)
 const SIDEBAR_LEFT_INSET = 332;
+const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const SPRING_PANEL = {
+  type: "spring",
+  stiffness: 320,
+  damping: 34,
+  mass: 0.8,
+} as const;
+const SPRING_ITEM = {
+  type: "spring",
+  stiffness: 380,
+  damping: 32,
+  mass: 0.65,
+} as const;
+const FEED_POLL_INTERVAL_MS = 30_000;
 
-const computeMapInsets = (isFilterBannerVisible: boolean): MapInsets => {
-  if (typeof window === "undefined") {
-    return { top: 0, right: 0, bottom: 0, left: 0 };
+type FeedPollingResponse = {
+  hasNewPosts: boolean;
+  newPostCount: number;
+  latestCreatedAt: number | null;
+  latestPostId: string | null;
+};
+
+const getViewportHeight = (): number => {
+  if (typeof window === "undefined") return 0;
+  const visualHeight = window.visualViewport?.height;
+  if (visualHeight !== undefined && visualHeight > 0) {
+    return Math.round(visualHeight);
   }
+  return Math.round(window.innerHeight);
+};
+
+const getViewportWidth = (): number => {
+  if (typeof window === "undefined") return 0;
+  const visualWidth = window.visualViewport?.width;
+  if (visualWidth !== undefined && visualWidth > 0) {
+    return Math.round(visualWidth);
+  }
+  return Math.round(window.innerWidth);
+};
+
+const getSafeAreaInsetBottom = (): number => {
+  if (typeof window === "undefined") return 0;
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue("--safe-area-inset-bottom")
+    .trim();
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const computeMapInsets = (
+  isFilterBannerVisible: boolean,
+  viewportHeight: number,
+  viewportWidth: number,
+  safeAreaInsetBottom: number,
+): MapInsets => {
   const panelBottom = isFilterBannerVisible
     ? PANEL_BOTTOM_FILTERED
     : PANEL_BOTTOM_DEFAULT;
-  if (window.innerWidth < MD_BREAKPOINT) {
+  if (viewportWidth < MD_BREAKPOINT) {
     return {
       top: 0,
       right: 0,
-      bottom: window.innerHeight * 0.6 + panelBottom,
+      bottom: viewportHeight * 0.6 + panelBottom + safeAreaInsetBottom,
       left: 0,
     };
   }
   return {
     top: 0,
     right: 0,
-    bottom: isFilterBannerVisible ? FILTER_BANNER_HEIGHT : 0,
+    bottom:
+      (isFilterBannerVisible ? FILTER_BANNER_HEIGHT : 0) + safeAreaInsetBottom,
     left: SIDEBAR_LEFT_INSET,
   };
 };
@@ -69,15 +127,22 @@ const PostsMapShell = ({
   avatarObjectKey,
   children,
 }: PostsMapShellProps): React.ReactElement => {
+  const prefersReducedMotion = useReducedMotion();
+  const router = useRouter();
   const params = useParams();
   const selectedPostId =
     typeof params.postId === "string" ? (params.postId as PostId) : null;
   const profileUserId =
     typeof params.userId === "string" ? params.userId : null;
 
-  const [activeLayerIds, setActiveLayerIds] = useState<Set<LayerId>>(
-    () => new Set(layers.map((l) => l.id)),
-  );
+  const [activeLayerIds, setActiveLayerIds] = useState<Set<LayerId>>(() => {
+    const allLayerIds = layers.map((layer) => layer.id);
+    if (typeof window === "undefined") return new Set(allLayerIds);
+    return (
+      parseActiveLayerIdsFromHash(window.location.hash, allLayerIds) ??
+      new Set(allLayerIds)
+    );
+  });
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const [focusedPostId, setFocusedPostId] = useState<PostId | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -91,16 +156,21 @@ const PostsMapShell = ({
     null,
   );
   const [isLocationPending, setIsLocationPending] = useState(false);
+  const [newPostCount, setNewPostCount] = useState(0);
+  const [isRefreshingFeed, setIsRefreshingFeed] = useState(false);
 
   const [visibleFeedPostIds, setVisibleFeedPostIds] = useState<PostId[]>([]);
 
   const mapBoundsRef = useRef<MapBounds | null>(null);
-  mapBoundsRef.current = mapBounds;
   const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibleFeedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feedSnapshotRef = useRef<{ createdAt: number; postId: string | null }>({
+    createdAt: 0,
+    postId: null,
+  });
 
   const isMapFiltered = mapBounds !== null;
   const isSearchActive = searchResultIds !== null;
@@ -108,17 +178,155 @@ const PostsMapShell = ({
   const isProfileShowing = profileUserId !== null;
   const isFilterBannerVisible =
     !isWriting && !isProfileShowing && (isMapFiltered || isSearchActive);
+  const panelKey = isPostSelected
+    ? "post-detail"
+    : isProfileShowing
+      ? "user-profile"
+      : isWriting
+        ? "write-form"
+        : "post-list";
 
-  const [mapInsets, setMapInsets] = useState<MapInsets>(() =>
-    computeMapInsets(false),
+  const [viewportHeight, setViewportHeight] = useState<number>(() =>
+    getViewportHeight(),
   );
+  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+    getViewportWidth(),
+  );
+  const [safeAreaInsetBottom, setSafeAreaInsetBottom] = useState<number>(() =>
+    getSafeAreaInsetBottom(),
+  );
+  const [mapInsets, setMapInsets] = useState<MapInsets>(() => ({
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  }));
+  const allLayerIds = useMemo(() => layers.map((layer) => layer.id), [layers]);
+
   useEffect(() => {
-    const update = (): void =>
-      setMapInsets(computeMapInsets(isFilterBannerVisible));
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [isFilterBannerVisible]);
+    mapBoundsRef.current = mapBounds;
+  }, [mapBounds]);
+
+  useEffect(() => {
+    const feedHead = posts[0];
+    feedSnapshotRef.current = {
+      createdAt: feedHead?.createdAt ?? 0,
+      postId: feedHead?.id ?? null,
+    };
+    setNewPostCount(0);
+    setIsRefreshingFeed(false);
+  }, [posts]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const handleResize = (): void => {
+      setViewportHeight(getViewportHeight());
+      setViewportWidth(getViewportWidth());
+      setSafeAreaInsetBottom(getSafeAreaInsetBottom());
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    viewport?.addEventListener("resize", handleResize);
+    viewport?.addEventListener("scroll", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      viewport?.removeEventListener("resize", handleResize);
+      viewport?.removeEventListener("scroll", handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const applyHashToLayerSelection = (): void => {
+      const parsedActiveLayerIds = parseActiveLayerIdsFromHash(
+        window.location.hash,
+        allLayerIds,
+      );
+      setActiveLayerIds(parsedActiveLayerIds ?? new Set(allLayerIds));
+    };
+
+    applyHashToLayerSelection();
+    window.addEventListener("hashchange", applyHashToLayerSelection);
+    return () => {
+      window.removeEventListener("hashchange", applyHashToLayerSelection);
+    };
+  }, [allLayerIds]);
+
+  useEffect(() => {
+    const nextHash = buildLayerFilterHash(
+      window.location.hash,
+      allLayerIds,
+      activeLayerIds,
+    );
+    if (window.location.hash === nextHash) return;
+    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+    window.history.replaceState(null, "", nextUrl);
+  }, [activeLayerIds, allLayerIds]);
+
+  useEffect(() => {
+    setMapInsets(
+      computeMapInsets(
+        isFilterBannerVisible,
+        viewportHeight,
+        viewportWidth,
+        safeAreaInsetBottom,
+      ),
+    );
+  }, [isFilterBannerVisible, viewportHeight, viewportWidth, safeAreaInsetBottom]);
+
+  const checkForNewPosts = useCallback(async (): Promise<void> => {
+    const snapshot = feedSnapshotRef.current;
+    const query = new URLSearchParams({
+      sinceCreatedAt: String(snapshot.createdAt),
+    });
+    if (snapshot.postId !== null) query.set("sincePostId", snapshot.postId);
+    const response = await fetch(`/api/feed?${query.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const payload = (await response.json()) as FeedPollingResponse;
+    if (!payload.hasNewPosts || payload.newPostCount <= 0) return;
+    setNewPostCount((prev) => Math.max(prev, payload.newPostCount));
+  }, []);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      void checkForNewPosts();
+    }, FEED_POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [checkForNewPosts]);
+
+  const isMobileViewport = viewportWidth < MD_BREAKPOINT;
+  const mobilePanelHeight = Math.max(Math.round(viewportHeight * 0.6), 280);
+  const panelBottomDefault =
+    panelKey === "post-detail"
+      ? DETAIL_PANEL_BOTTOM_DEFAULT
+      : PANEL_BOTTOM_DEFAULT;
+  const panelBottomFiltered =
+    panelKey === "post-detail"
+      ? DETAIL_PANEL_BOTTOM_FILTERED
+      : PANEL_BOTTOM_FILTERED;
+  const shouldApplyMobileSafeAreaOffset =
+    panelKey !== "post-detail" || isFilterBannerVisible;
+  const shouldReduceMobilePanelHeightForFilter = panelKey !== "post-detail";
+  const floatingPanelBottom =
+    (isFilterBannerVisible ? panelBottomFiltered : panelBottomDefault) +
+    (isMobileViewport && shouldApplyMobileSafeAreaOffset ? safeAreaInsetBottom : 0);
+  const floatingPanelDesktopHeight = Math.max(
+    viewportHeight - 24 - (isFilterBannerVisible ? FILTER_BANNER_HEIGHT : 0),
+    320,
+  );
+  const floatingPanelMobileHeight = Math.max(
+    mobilePanelHeight -
+      (isFilterBannerVisible && shouldReduceMobilePanelHeightForFilter
+        ? FILTER_BANNER_HEIGHT
+        : 0),
+    240,
+  );
+  const floatingPanelAnimate: { bottom: number; height: number } =
+    isMobileViewport
+      ? { bottom: floatingPanelBottom, height: floatingPanelMobileHeight }
+      : { bottom: floatingPanelBottom, height: floatingPanelDesktopHeight };
 
   const mapPosts = useMemo(() => {
     return posts.filter(
@@ -228,22 +436,24 @@ const PostsMapShell = ({
     [],
   );
 
-  const activePostId = selectedPostId ?? focusedPostId;
+  const handleRefreshFeed = useCallback(() => {
+    setIsRefreshingFeed(true);
+    setNewPostCount(0);
+    router.refresh();
+  }, [router]);
 
-  // Panel key for AnimatePresence: four exclusive states
-  const panelKey = isPostSelected
-    ? "post-detail"
-    : isProfileShowing
-      ? "user-profile"
-      : isWriting
-        ? "write-form"
-        : "post-list";
+  const activePostId = selectedPostId ?? focusedPostId;
 
   return (
     <div className="relative h-full overflow-hidden">
       {/* User menu — top right */}
       {username !== null && (
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-end">
+        <motion.div
+          className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-end"
+          initial={prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
+          animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.45, ease: EASE_OUT }}
+        >
           <div className="pointer-events-auto">
             <UserMenu
               username={username}
@@ -251,8 +461,35 @@ const PostsMapShell = ({
               avatarObjectKey={avatarObjectKey}
             />
           </div>
-        </div>
+        </motion.div>
       )}
+
+      <AnimatePresence>
+        {newPostCount > 0 && panelKey === "post-list" && (
+          <motion.div
+            className="pointer-events-none absolute inset-x-3 top-3 z-20 flex justify-center md:left-[344px] md:right-3 md:justify-start"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
+            animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+            exit={prefersReducedMotion ? undefined : { opacity: 0, y: -8, scale: 0.98 }}
+            transition={SPRING_ITEM}
+          >
+            <motion.button
+              type="button"
+              onClick={handleRefreshFeed}
+              whileHover={prefersReducedMotion ? undefined : { y: -1, scale: 1.01 }}
+              whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
+              transition={SPRING_ITEM}
+              className="glass pointer-events-auto flex items-center gap-2 rounded-full border border-postech-400/35 bg-zinc-900/72 px-3 py-2 text-xs text-postech-100 backdrop-blur-xl backdrop-saturate-200"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${isRefreshingFeed ? "animate-spin" : ""}`}
+              />
+              <span>{`새 글 ${newPostCount}개`}</span>
+              <span className="text-postech-300/85">새로고침</span>
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Full-bleed map */}
       <div className="absolute inset-0">
@@ -274,14 +511,14 @@ const PostsMapShell = ({
       <AnimatePresence>
         {isFilterBannerVisible && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="pointer-events-none fixed bottom-0 left-0 right-0 z-50"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+            animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? undefined : { opacity: 0, y: 10 }}
+            transition={SPRING_ITEM}
+            className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom,0px)]"
           >
-            <div className="pointer-events-auto flex items-center gap-3 border-t border-zinc-200/60 bg-white/85 px-4 py-2.5 backdrop-blur-xl backdrop-saturate-200 dark:border-white/10 dark:bg-zinc-900/80">
-              <span className="text-xs text-postech-700 dark:text-postech-300">
+            <div className="pointer-events-auto flex items-center gap-3 border-t border-postech-500/40 bg-postech-500/12 px-4 py-2.5 backdrop-blur-xl backdrop-saturate-200">
+              <span className="text-xs text-postech-200">
                 {isSearchActive && isMapFiltered
                   ? `검색 · 지도 필터 · ${filteredPosts.length}개`
                   : isSearchActive
@@ -293,7 +530,7 @@ const PostsMapShell = ({
                   <button
                     type="button"
                     onClick={() => handleSearchChange("")}
-                    className="text-xs text-postech-600 underline-offset-2 transition-colors hover:underline dark:text-postech-400"
+                    className="text-xs text-postech-300 underline-offset-2 transition-colors hover:text-postech-100 hover:underline"
                   >
                     검색 초기화
                   </button>
@@ -302,7 +539,7 @@ const PostsMapShell = ({
                   <button
                     type="button"
                     onClick={handleResetMapFilter}
-                    className="text-xs text-postech-600 underline-offset-2 transition-colors hover:underline dark:text-postech-400"
+                    className="text-xs text-postech-300 underline-offset-2 transition-colors hover:text-postech-100 hover:underline"
                   >
                     지도 초기화
                   </button>
@@ -315,27 +552,22 @@ const PostsMapShell = ({
 
       {/* Floating UI — each element is an independent glass component */}
       <motion.div
-        animate={{ bottom: isFilterBannerVisible ? 53 : 12 }}
-        transition={{ duration: 0.18, ease: "easeOut" }}
-        className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex h-[60vh] flex-col gap-2 overflow-hidden md:h-auto md:inset-y-3 md:right-auto md:w-80"
+        animate={floatingPanelAnimate}
+        transition={SPRING_PANEL}
+        className="pointer-events-none absolute inset-x-3 z-10 flex flex-col gap-2 overflow-hidden md:right-auto md:w-80"
       >
         {/* Main content panel */}
         <AnimatePresence mode="wait" initial={false}>
           {panelKey === "post-detail" && (
             <motion.div
               key="post-detail"
-              className="flex min-h-0 flex-1 flex-col gap-2"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-2 overflow-hidden pb-[env(safe-area-inset-bottom,0px)] md:pb-0"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
+              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              transition={SPRING_ITEM}
             >
-              {/* Post content */}
-              <div className="glass pointer-events-auto min-h-0 flex-1 overflow-hidden rounded-2xl border border-black/8 bg-white/55 backdrop-blur-xl backdrop-saturate-200 dark:border-white/10 dark:bg-zinc-900/45">
-                <div className="h-full overflow-y-auto overscroll-contain">
-                  {children}
-                </div>
-              </div>
+              {children}
             </motion.div>
           )}
 
@@ -343,10 +575,10 @@ const PostsMapShell = ({
             <motion.div
               key="user-profile"
               className="flex min-h-0 flex-1 flex-col gap-2"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
+              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              transition={SPRING_ITEM}
             >
               {children}
             </motion.div>
@@ -355,11 +587,11 @@ const PostsMapShell = ({
           {panelKey === "write-form" && (
             <motion.div
               key="write-form"
-              className="glass pointer-events-auto min-h-0 flex-1 overflow-hidden rounded-2xl border border-black/8 bg-white/55 backdrop-blur-xl backdrop-saturate-200 dark:border-white/10 dark:bg-zinc-900/45"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="glass pointer-events-auto mt-auto max-h-full overflow-y-auto rounded-2xl border border-white/10 bg-white/55 backdrop-blur-xl backdrop-saturate-200 md:mt-0 bg-zinc-900/45"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
+              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              transition={SPRING_ITEM}
             >
               <WritePostPanel
                 layers={layers}
@@ -376,13 +608,13 @@ const PostsMapShell = ({
             <motion.div
               key="post-list"
               className="flex min-h-0 flex-1 flex-col gap-2"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
+              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              transition={SPRING_ITEM}
             >
               {/* Post list */}
-              <div className="glass pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-black/8 bg-white/55 backdrop-blur-xl backdrop-saturate-200 dark:border-white/10 dark:bg-zinc-900/45">
+              <div className="glass pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/55 backdrop-blur-xl backdrop-saturate-200 bg-zinc-900/45">
                 <PostList
                   posts={filteredPosts}
                   focusedPostId={focusedPostId}
@@ -393,7 +625,7 @@ const PostsMapShell = ({
                 />
               </div>
               {/* Search bar */}
-              <div className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-black/8 bg-white/55 backdrop-blur-xl backdrop-saturate-200 dark:border-white/10 dark:bg-zinc-900/45">
+              <div className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/55 backdrop-blur-xl backdrop-saturate-200 bg-zinc-900/45">
                 <SearchBar
                   value={searchQuery}
                   onChange={handleSearchChange}
@@ -409,7 +641,7 @@ const PostsMapShell = ({
           !isPostSelected &&
           !isProfileShowing &&
           layers.length > 0 && (
-            <div className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-black/8 bg-white/55 backdrop-blur-xl backdrop-saturate-200 dark:border-white/10 dark:bg-zinc-900/45">
+            <div className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/55 backdrop-blur-xl backdrop-saturate-200 bg-zinc-900/45">
               <div
                 className="flex flex-wrap auto-cols-max grid-rows-2 gap-1.5 overflow-x-auto px-4 py-2.5 [grid-auto-flow:column]"
                 style={{ scrollbarWidth: "none" }}
@@ -417,19 +649,24 @@ const PostsMapShell = ({
                 {layers.map((layer) => {
                   const active = activeLayerIds.has(layer.id);
                   return (
-                    <button
+                    <motion.button
                       key={layer.id}
                       type="button"
                       title={layer.description}
                       onClick={() => toggleLayer(layer.id)}
+                      whileHover={
+                        prefersReducedMotion ? undefined : { y: -1.5, scale: active ? 1.01 : 1.035 }
+                      }
+                      whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+                      transition={SPRING_ITEM}
                       className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                         active
                           ? "bg-postech-600 text-white"
-                          : "bg-black/5 text-zinc-500 dark:bg-white/10 dark:text-zinc-400"
+                          : "bg-black/5 text-zinc-500 bg-white/10 text-zinc-400"
                       }`}
                     >
                       {layer.name}
-                    </button>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -439,10 +676,13 @@ const PostsMapShell = ({
         {/* Write CTA bar — visible on post-list */}
         {panelKey === "post-list" && (
           isAuthenticated ? (
-            <button
+            <motion.button
               type="button"
               onClick={handleStartWriting}
-              className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-postech-400/40 bg-postech-600/85 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-postech-600/95 dark:border-postech-500/30 dark:bg-postech-700/75 dark:hover:bg-postech-700/90"
+              whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
+              whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
+              transition={SPRING_ITEM}
+              className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-postech-500/30 bg-postech-600/85 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-postech-600/95 bg-postech-700/75 hover:bg-postech-700/90"
             >
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-2.5">
@@ -453,11 +693,14 @@ const PostsMapShell = ({
                 </div>
                 <span className="text-xs text-white/55"></span>
               </div>
-            </button>
+            </motion.button>
           ) : (
-            <a
+            <motion.a
               href="/login"
-              className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-postech-400/40 bg-postech-600/85 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-postech-600/95 dark:border-postech-500/30 dark:bg-postech-700/75 dark:hover:bg-postech-700/90"
+              whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
+              whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
+              transition={SPRING_ITEM}
+              className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-postech-500/30 bg-postech-600/85 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-postech-600/95 bg-postech-700/75 hover:bg-postech-700/90"
             >
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-2.5">
@@ -467,7 +710,7 @@ const PostsMapShell = ({
                   </span>
                 </div>
               </div>
-            </a>
+            </motion.a>
           )
         )}
       </motion.div>

@@ -2,9 +2,10 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  color-scheme: dark;
+  color-scheme: only dark;
   --background: #0a0a0a;
   --foreground: #ededed;
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @theme inline {
@@ -30,15 +31,278 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), "Satoshi", "Space Grotesk", "Noto Sans KR", sans-serif;
+}
+
+.app-map-viewport {
+  position: relative;
+  isolation: isolate;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  overflow: clip;
+}
+
+.app-map-viewport::before,
+.app-map-viewport::after {
+  content: "";
+  position: absolute;
+  inset: -24%;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.app-map-viewport::before {
+  background:
+    radial-gradient(
+      52% 44% at 18% 20%,
+      color-mix(in oklab, var(--color-postech-500) 18%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      56% 48% at 86% 74%,
+      color-mix(in oklab, var(--color-postech-700) 22%, transparent),
+      transparent 72%
+    );
+  filter: blur(42px) saturate(120%);
+  animation: map-ambient-float 16s ease-in-out infinite alternate;
+}
+
+.app-map-viewport::after {
+  background:
+    linear-gradient(
+      125deg,
+      rgba(255, 255, 255, 0.05),
+      rgba(255, 255, 255, 0.01) 38%,
+      rgba(255, 255, 255, 0.04)
+    );
+  opacity: 0.45;
+  mix-blend-mode: screen;
+  animation: map-ambient-glint 13s linear infinite;
 }
 
 /* Liquid Glass — backdrop material */
-.glass {}
+.glass {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.glass::before {
+  content: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.04) 32%,
+      rgba(255, 255, 255, 0.02) 64%,
+      rgba(255, 255, 255, 0.14) 100%
+    );
+  opacity: 0;
+}
+
+.glass-spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      260px 260px at var(--hover-x, 50%) var(--hover-y, 50%),
+      rgba(166, 25, 85, 0.24) 0%,
+      rgba(166, 25, 85, 0.12) 28%,
+      rgba(166, 25, 85, 0) 66%
+    );
+  opacity: 0;
+  mix-blend-mode: screen;
+  transition: opacity 220ms ease;
+}
+
+.glass:hover {
+  border-color: color-mix(in oklab, var(--color-postech-300) 24%, transparent);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.glass:hover::before {
+  opacity: 0;
+}
+
+.glass-spotlight:hover::after {
+  display: block;
+  opacity: 0.85;
+}
+
+button,
+a,
+[role="button"],
+[role="link"] {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="link"]:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-postech-400) 72%, white);
+  outline-offset: 2px;
+}
+
+.post-list-item {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in oklab, var(--color-postech-500) 6%, transparent),
+      transparent 60%
+    );
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 220ms ease;
+}
+
+.post-hover-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.post-list-item::before {
+  content: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      118deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.12) 42%,
+      transparent 78%
+    );
+  opacity: 0;
+}
+
+.post-hover-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      220px 220px at var(--hover-x, 50%) var(--hover-y, 50%),
+      rgba(166, 25, 85, 0.28) 0%,
+      rgba(166, 25, 85, 0.16) 28%,
+      rgba(166, 25, 85, 0) 62%
+    );
+  opacity: 0;
+  mix-blend-mode: screen;
+  transition: opacity 220ms ease;
+}
+
+.post-list-item:hover {
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in oklab, var(--color-postech-500) 12%, transparent),
+      color-mix(in oklab, var(--color-postech-700) 8%, transparent) 65%
+    );
+  border-top-color: color-mix(in oklab, var(--color-postech-300) 28%, transparent);
+  border-bottom-color: color-mix(in oklab, var(--color-postech-300) 18%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.post-list-item:hover::before {
+  opacity: 0;
+}
+
+.post-hover-glow:hover::after {
+  display: block;
+  opacity: 0.9;
+}
+
+.post-list-item-focused {
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in oklab, var(--color-postech-500) 14%, transparent),
+      color-mix(in oklab, var(--color-postech-700) 10%, transparent) 68%
+    );
+  border-top-color: color-mix(in oklab, var(--color-postech-300) 34%, transparent);
+  border-bottom-color: color-mix(in oklab, var(--color-postech-300) 24%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@keyframes map-ambient-float {
+  from {
+    transform: translate3d(-2%, -2%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2%, 2%, 0) scale(1.08);
+  }
+}
+
+@keyframes map-ambient-glint {
+  0% {
+    transform: translate3d(-9%, -7%, 0);
+  }
+  50% {
+    transform: translate3d(6%, 4%, 0);
+  }
+  100% {
+    transform: translate3d(-9%, -7%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-map-viewport::before,
+  .app-map-viewport::after {
+    animation: none !important;
+  }
+
+  .glass,
+  .post-list-item {
+    transition: none !important;
+  }
+}
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
   background: #18181b;
   color: #e4e4e7;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* Prevent iOS Safari auto-zoom when focusing small text inputs. */
+@media (max-width: 767px) {
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
