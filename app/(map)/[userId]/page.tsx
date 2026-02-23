@@ -88,108 +88,72 @@ const UserProfilePage = async ({
 
   const { user, posts, replies } = profileData;
 
+  const author = {
+    id: user.id,
+    username: user.username,
+    avatarObjectKey: user.avatarObjectKey,
+  };
+
+  const feedItems = [
+    ...posts.map((p) => ({
+      id: p.id,
+      author,
+      content: p.content,
+      createdAt: p.createdAt,
+      heartCount: p.heartCount,
+      isHearted: false as const,
+      replyCount: p.replyCount,
+      layer: p.layer,
+      visibility: p.visibility,
+      attachments: p.attachments,
+    })),
+    ...replies.map((r) => ({
+      id: r.id,
+      author,
+      content: r.content,
+      createdAt: r.createdAt,
+      heartCount: r.heartCount,
+      isHearted: false as const,
+      replyCount: 0,
+      layer: null,
+      visibility: r.visibility,
+      attachments: r.attachments,
+    })),
+  ].sort((a, b) => b.createdAt - a.createdAt);
+
   return (
-    <>
-      {/* Panel 1: User metadata */}
-      <ProfilePanel
-        user={user}
-        isOwner={isOwner}
-        postCount={posts.length}
-        replyCount={replies.length}
-      />
-
-      {/* Panel 2: Posts */}
-      <div
-        className={`${GLASS} ${posts.length === 0 ? "shrink-0" : "min-h-0 flex-1"}`}
-      >
-        <div className="h-full overflow-y-auto overscroll-contain">
-          <div className="border-b border-white/8 px-4 py-2.5">
-            <span className="text-xs font-medium text-zinc-500">게시글</span>
-            <span className="ml-1.5 tabular-nums text-xs text-zinc-400">
-              {posts.length}
-            </span>
-          </div>
-          <ul className="divide-y divide-zinc-900">
-            {posts.length === 0 ? (
-              <li className="py-8 text-center text-sm text-zinc-600">
-                아직 게시글이 없습니다.
-              </li>
-            ) : (
-              posts.map((post) => (
-                <li key={post.id}>
-                  <Post
-                    post={{
-                      id: post.id,
-                      author: {
-                        id: user.id,
-                        username: user.username,
-                        avatarObjectKey: user.avatarObjectKey,
-                      },
-                      content: post.content,
-                      createdAt: post.createdAt,
-                      heartCount: post.heartCount,
-                      isHearted: false,
-                      replyCount: post.replyCount,
-                      layer: post.layer,
-                      visibility: post.visibility,
-                      attachments: post.attachments,
-                    }}
-                    variant="list"
-                    isAuthenticated={isAuthenticated}
-                  />
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
+    <div className="pointer-events-auto min-h-0 flex-1 overflow-hidden overflow-y-auto overscroll-contain rounded-2xl pb-[env(safe-area-inset-bottom,0px)] [scrollbar-width:none] md:pb-0">
+      {/* Profile metadata */}
+      <div className={GLASS}>
+        <ProfilePanel
+          user={user}
+          isOwner={isOwner}
+          postCount={posts.length}
+          replyCount={replies.length}
+        />
       </div>
 
-      {/* Panel 3: Replies */}
-      <div
-        className={`${GLASS} ${replies.length === 0 ? "shrink-0" : "min-h-0 flex-1"}`}
-      >
-        <div className="h-full overflow-y-auto overscroll-contain">
-          <div className="border-b border-white/8 px-4 py-2.5">
-            <span className="text-xs font-medium text-zinc-500">답글</span>
-            <span className="ml-1.5 tabular-nums text-xs text-zinc-400">
-              {replies.length}
-            </span>
-          </div>
+      {/* Chronological feed */}
+      <div className={`${GLASS} mt-2`}>
+        {feedItems.length === 0 ? (
+          <p className="py-8 text-center text-sm text-zinc-600">
+            아직 활동이 없습니다.
+          </p>
+        ) : (
           <ul className="divide-y divide-zinc-900">
-            {replies.length === 0 ? (
-              <li className="py-8 text-center text-sm text-zinc-600">
-                아직 답글이 없습니다.
+            {feedItems.map((item) => (
+              <li key={item.id}>
+                <Post
+                  post={item}
+                  variant="list"
+                  isAuthenticated={isAuthenticated}
+                />
               </li>
-            ) : (
-              replies.map((reply) => (
-                <li key={reply.id}>
-                  <Post
-                    post={{
-                      id: reply.id,
-                      author: {
-                        id: user.id,
-                        username: user.username,
-                        avatarObjectKey: user.avatarObjectKey,
-                      },
-                      content: reply.content,
-                      createdAt: reply.createdAt,
-                      heartCount: reply.heartCount,
-                      isHearted: false,
-                      replyCount: 0,
-                      layer: null,
-                      visibility: reply.visibility,
-                      attachments: reply.attachments,
-                    }}
-                    variant="list"
-                    isAuthenticated={isAuthenticated}
-                  />
-                </li>
-              ))
-            )}
+            ))}
           </ul>
-        </div>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 
