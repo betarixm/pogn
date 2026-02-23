@@ -1,7 +1,13 @@
 import { eq, isNull, isNotNull, and, desc, count, inArray } from "drizzle-orm";
 import type { AppDatabase } from "@/database/client";
-import type { PostId, UserId, LayerId, PostVisibility } from "@/database/types";
+import type { PostId, UserId, LayerId, PostVisibility, AttachmentId } from "@/database/types";
 import * as schema from "@/database/schema";
+
+type ProfileAttachment = {
+  id: AttachmentId;
+  objectKey: string;
+  contentType: string;
+};
 
 export type ProfileUser = {
   id: UserId;
@@ -18,6 +24,7 @@ export type ProfilePost = {
   heartCount: number;
   replyCount: number;
   createdAt: number;
+  attachments: ProfileAttachment[];
 };
 
 export type ProfileReply = {
@@ -27,6 +34,7 @@ export type ProfileReply = {
   parentId: PostId;
   heartCount: number;
   createdAt: number;
+  attachments: ProfileAttachment[];
 };
 
 export type UserProfileData = {
@@ -132,6 +140,27 @@ export const getUserProfileData = async (
     }
   }
 
+  const attachmentMap = new Map<string, ProfileAttachment[]>();
+  if (allIds.length > 0) {
+    const attachmentRows = await database
+      .select({
+        id: schema.attachments.id,
+        postId: schema.attachments.postId,
+        objectKey: schema.attachments.objectKey,
+        contentType: schema.attachments.contentType,
+        displayOrder: schema.attachments.displayOrder,
+      })
+      .from(schema.attachments)
+      .where(inArray(schema.attachments.postId, allIds))
+      .orderBy(schema.attachments.displayOrder)
+      .all();
+    for (const r of attachmentRows) {
+      const list = attachmentMap.get(r.postId) ?? [];
+      list.push({ id: r.id, objectKey: r.objectKey, contentType: r.contentType });
+      attachmentMap.set(r.postId, list);
+    }
+  }
+
   return {
     user: {
       id: userRow.id,
@@ -151,6 +180,7 @@ export const getUserProfileData = async (
           : null,
       heartCount: heartCountMap.get(row.id) ?? 0,
       replyCount: replyCountMap.get(row.id) ?? 0,
+      attachments: attachmentMap.get(row.id) ?? [],
     })),
     replies: replyRows
       .filter((row) => row.parentId !== null)
@@ -162,6 +192,7 @@ export const getUserProfileData = async (
         parentId: row.parentId as PostId,
         heartCount: heartCountMap.get(row.id) ?? 0,
         createdAt: row.createdAt,
+        attachments: attachmentMap.get(row.id) ?? [],
       })),
   };
 };

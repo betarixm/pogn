@@ -132,6 +132,7 @@ const UserProfilePage = async ({
                       replyCount: post.replyCount,
                       layer: post.layer,
                       visibility: post.visibility,
+                      attachments: post.attachments,
                     }}
                     variant="list"
                     isAuthenticated={isAuthenticated}
@@ -177,6 +178,7 @@ const UserProfilePage = async ({
                       replyCount: 0,
                       layer: null,
                       visibility: reply.visibility,
+                      attachments: reply.attachments,
                     }}
                     variant="list"
                     isAuthenticated={isAuthenticated}
