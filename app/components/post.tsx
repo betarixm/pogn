@@ -278,12 +278,12 @@ const Post = ({
           animate={prefersReducedMotion ? undefined : { scale: [1, 1.04, 1] }}
           transition={{ duration: 0.24 }}
         >
-          {selectedImageIndex + 1} / {images.length}
+          {selectedImageIndex! + 1} / {images.length}
         </motion.div>
         <motion.img
           key={selectedImage.id}
           src={mediaUrl(selectedImage.objectKey)}
-          alt={`첨부 이미지 ${selectedImageIndex + 1}`}
+          alt={`첨부 이미지 ${selectedImageIndex! + 1}`}
           className="max-h-[90vh] max-w-[90vw] object-contain"
           style={{ transformOrigin: "center center" }}
           initial={false}
