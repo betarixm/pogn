@@ -109,6 +109,7 @@ const UserProfilePage = async ({
     })),
     ...replies.map((r) => ({
       id: r.id,
+      rootPostId: r.rootPostId,
       author,
       content: r.content,
       createdAt: r.createdAt,

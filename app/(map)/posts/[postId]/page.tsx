@@ -101,6 +101,9 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  notFound();
  }
 
+ // Root of this thread: if we're on a reply page, rootId points to the root; otherwise current post IS root
+ const threadRootId = thread.rootId ?? post.id;
+
  const jsonLd = {
  "@context": "https://schema.org",
  "@type": "SocialMediaPosting",
@@ -161,6 +164,7 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  isAuthenticated={isAuthenticated}
  post={{
  id: ancestor.id,
+ rootPostId: threadRootId,
  author: ancestor.author,
  content: ancestor.content,
  createdAt: ancestor.createdAt,
@@ -176,7 +180,7 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  </ul>
  )}
  <div className="px-4 py-4">
- <ThreadList descendants={thread.descendants} isAuthenticated={isAuthenticated} />
+ <ThreadList descendants={thread.descendants} rootPostId={threadRootId} isAuthenticated={isAuthenticated} />
  </div>
  </section>
  {/* Form panel */}

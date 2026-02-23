@@ -32,6 +32,7 @@ export type ProfileReply = {
   content: string;
   visibility: PostVisibility;
   parentId: PostId;
+  rootPostId: PostId;
   heartCount: number;
   createdAt: number;
   attachments: ProfileAttachment[];
@@ -161,6 +162,37 @@ export const getUserProfileData = async (
     }
   }
 
+  // Walk up parent chains in batches to find the root post for each reply
+  const rootPostIdMap = new Map<PostId, PostId>();
+  if (replyRows.length > 0) {
+    // frontier: replyId -> currentAncestorId being tracked
+    let frontier = new Map<PostId, PostId>(
+      replyRows
+        .filter((r) => r.parentId !== null)
+        .map((r) => [r.id, r.parentId as PostId]),
+    );
+    while (frontier.size > 0) {
+      const currentIds = [...new Set(frontier.values())];
+      const parentRows = await database
+        .select({ id: schema.posts.id, parentId: schema.posts.parentId })
+        .from(schema.posts)
+        .where(inArray(schema.posts.id, currentIds))
+        .all();
+      const parentLookup = new Map(parentRows.map((r) => [r.id, r.parentId]));
+      const nextFrontier = new Map<PostId, PostId>();
+      for (const [replyId, currentId] of frontier) {
+        const parentId = parentLookup.get(currentId);
+        if (parentId == null) {
+          // currentId has no parent — it IS the root
+          rootPostIdMap.set(replyId, currentId);
+        } else {
+          nextFrontier.set(replyId, parentId);
+        }
+      }
+      frontier = nextFrontier;
+    }
+  }
+
   return {
     user: {
       id: userRow.id,
@@ -190,6 +222,7 @@ export const getUserProfileData = async (
           !isAuthenticated && row.visibility === "members" ? "" : row.content,
         visibility: row.visibility,
         parentId: row.parentId as PostId,
+        rootPostId: rootPostIdMap.get(row.id) ?? (row.parentId as PostId),
         heartCount: heartCountMap.get(row.id) ?? 0,
         createdAt: row.createdAt,
         attachments: attachmentMap.get(row.id) ?? [],

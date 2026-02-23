@@ -1,13 +1,16 @@
 import type { ThreadPost } from "@/database/queries/posts";
+import type { PostId } from "@/database/types";
 import Post from "@/app/components/post";
 
 export type ThreadListProps = React.HTMLAttributes<HTMLElement> & {
  descendants: ThreadPost[];
+ rootPostId: PostId;
  isAuthenticated?: boolean;
 };
 
 export const ThreadList = ({
  descendants,
+ rootPostId,
  isAuthenticated = false,
  className,
  ...props
@@ -33,6 +36,7 @@ export const ThreadList = ({
  <Post
  post={{
  id: post.id,
+ rootPostId,
  author: post.author,
  content: post.content,
  createdAt: post.createdAt,

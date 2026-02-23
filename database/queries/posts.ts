@@ -73,6 +73,7 @@ export type ThreadPost = {
 };
 
 export type PostThread = {
+  rootId: PostId | null; // null when the post itself is the root
   ancestors: AncestorPost[];
   descendants: ThreadPost[];
 };
@@ -292,6 +293,8 @@ export const getPostThread = async (
     current = row.parentId;
     ancestorIds.unshift(current);
   }
+  // `current` is now the root post ID (equals postId when postId is already root)
+  const rootId: PostId | null = current !== postId ? current : null;
 
   // Fetch ancestor data preserving root-first order
   let ancestors: AncestorPost[] = [];
@@ -343,7 +346,7 @@ export const getPostThread = async (
   }
 
   if (allDescendantIds.size === 0) {
-    return { ancestors, descendants: [] };
+    return { rootId, ancestors, descendants: [] };
   }
 
   // Fetch all descendant post data
@@ -450,5 +453,5 @@ export const getPostThread = async (
     }
   }
 
-  return { ancestors, descendants };
+  return { rootId, ancestors, descendants };
 };

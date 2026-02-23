@@ -32,6 +32,7 @@ export type PostAttachment = {
 
 export type PostData = {
  id: PostId;
+ rootPostId?: PostId;
  author: PostAuthor;
  content: string;
  createdAt: number;
@@ -387,7 +388,7 @@ const Post = ({
   const detailLabel = `${post.author.username}님의 게시글 상세 보기`;
 
   const navigateToDetail = (): void => {
-    router.push(`/posts/${post.id}`);
+    router.push(`/posts/${post.rootPostId ?? post.id}`);
   };
 
   const shouldIgnorePostNavigation = (
