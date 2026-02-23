@@ -25,6 +25,17 @@ export const getUserById = async (
   return rows[0];
 };
 
+export const getUserByEmail = async (
+  database: AppDatabase,
+  email: string,
+): Promise<typeof schema.users.$inferSelect | undefined> => {
+  const rows = await database
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, email));
+  return rows[0];
+};
+
 export type UserProfileUpdates = {
   username?: string;
   avatarObjectKey?: string;

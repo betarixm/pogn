@@ -1,8 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createDatabaseClient } from "@/database/client";
 import { getPostsWithLocation, getLayers } from "@/database/queries/map";
-import { getUserById } from "@/database/queries/auth";
-import { createUserId } from "@/database/types";
+import { getUserByEmail } from "@/database/queries/auth";
 import { getServerSession } from "@/lib/auth";
 import PostsMapShell from "@/app/components/posts-map-shell";
 
@@ -20,18 +19,17 @@ const MapLayout = async ({
 
   const database = createDatabaseClient(env.DB);
   const isAuthenticated = session !== null;
-  const userId = isAuthenticated ? session.user.id : null;
 
-  const [posts, layers, userRow] = await Promise.all([
-    getPostsWithLocation(
-      database,
-      userId !== null ? createUserId(userId) : null,
-    ),
+  const [layers, userRow] = await Promise.all([
     getLayers(database),
-    userId !== null
-      ? getUserById(database, createUserId(userId))
+    isAuthenticated
+      ? getUserByEmail(database, session.user.email)
       : Promise.resolve(undefined),
   ]);
+
+  const userId = userRow?.id ?? null;
+
+  const posts = await getPostsWithLocation(database, userId);
 
   const username = isAuthenticated
     ? ((session.user as { username?: string } | undefined)?.username ?? null)
