@@ -31,6 +31,8 @@ const DETAIL_PANEL_BOTTOM_FILTERED =
   DETAIL_PANEL_BOTTOM_DEFAULT + FILTER_BANNER_HEIGHT;
 // Tailwind md breakpoint (px)
 const MD_BREAKPOINT = 768;
+// Mobile floating panel height as a fraction of viewport height
+const MOBILE_PANEL_HEIGHT_RATIO = 0.65;
 // Desktop sidebar: inset-x-3 (12px) + w-80 (320px)
 const SIDEBAR_LEFT_INSET = 332;
 const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -95,7 +97,7 @@ const computeMapInsets = (
     return {
       top: 0,
       right: 0,
-      bottom: viewportHeight * 0.6 + panelBottom + safeAreaInsetBottom,
+      bottom: viewportHeight * MOBILE_PANEL_HEIGHT_RATIO + panelBottom + safeAreaInsetBottom,
       left: 0,
     };
   }
@@ -297,7 +299,7 @@ const PostsMapShell = ({
   }, [checkForNewPosts]);
 
   const isMobileViewport = viewportWidth < MD_BREAKPOINT;
-  const mobilePanelHeight = Math.max(Math.round(viewportHeight * 0.6), 280);
+  const mobilePanelHeight = Math.max(Math.round(viewportHeight * MOBILE_PANEL_HEIGHT_RATIO), 280);
   const panelBottomDefault =
     panelKey === "post-detail"
       ? DETAIL_PANEL_BOTTOM_DEFAULT
