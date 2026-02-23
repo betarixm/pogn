@@ -38,12 +38,14 @@ const createAuth = (database: AppDatabase) =>
       },
     },
     advanced: {
-      generateId: ({ model }) => {
-        if (model === "user") {
-          return generateUserId();
-        }
+      database: {
+        generateId: ({ model }) => {
+          if (model === "user") {
+            return generateUserId();
+          }
 
-        return crypto.randomUUID();
+          return crypto.randomUUID();
+        },
       },
     },
     databaseHooks: {
