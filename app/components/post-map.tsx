@@ -89,14 +89,14 @@ const MapController = ({
     const post = postsRef.current.find((p) => p.id === selectedPostId);
     if (post === undefined) return;
     isProgrammatic.current = true;
-    const zoom = 17;
+    const zoom = 18;
     const adjusted = adjustLatLngForInsets(
       map,
       [post.latitude, post.longitude],
       zoom,
       insetsRef.current,
     );
-    map.flyTo(adjusted, zoom, { duration: 0.6 });
+    map.flyTo(adjusted, zoom, { duration: 0.7 });
   }, [selectedPostId, map]);
 
   // Pan to fit visible feed posts (scroll-driven, only when no post is selected)

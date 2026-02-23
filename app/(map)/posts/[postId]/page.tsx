@@ -18,7 +18,6 @@ type PostPageProps = {
 
 const floatingPanelClassName =
  "glass pointer-events-auto overflow-hidden rounded-2xl border border-white/10 bg-white/55 backdrop-blur-xl backdrop-saturate-200 bg-zinc-900/45";
-const fixedPanelClassName = `${floatingPanelClassName} shrink-0`;
 
 const truncate = (text: string, maxLength: number): string =>
  text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
@@ -93,7 +92,6 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  ]);
  const avatarObjectKey = userRow?.avatarObjectKey ?? null;
  const shouldShowReplyForm = isAuthenticated;
- const threadPanelClassName = `${floatingPanelClassName} min-h-0 flex-1 flex flex-col`;
 
  if (post === null) {
  notFound();
@@ -118,8 +116,11 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  type="application/ld+json"
  dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
  />
+ <div className="pointer-events-auto min-h-0 flex-1 overflow-y-auto overscroll-contain pb-14 [scrollbar-width:none] md:pb-3">
+ {/* 모바일 전용 투명 spacer — 지도가 비쳐 보임 */}
+ <div className="h-[35dvh] md:hidden" />
  {/* Post panel */}
- <article className={`${fixedPanelClassName} glass-spotlight`}>
+ <article className={`${floatingPanelClassName} glass-spotlight`}>
  <div className="px-4 pb-3 pt-4">
  <Post
  variant="detail"
@@ -146,8 +147,7 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  </div>
  </article>
  {/* Thread panel */}
- <section className={threadPanelClassName}>
- <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+ <section className={`${floatingPanelClassName} mt-2`}>
  {thread.ancestors.length > 0 && (
  <ul className="divide-y divide-zinc-800/60">
  {thread.ancestors.map((ancestor) => (
@@ -174,11 +174,10 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  <div className="px-4 py-4">
  <ThreadList descendants={thread.descendants} isAuthenticated={isAuthenticated} />
  </div>
- </div>
  </section>
  {/* Form panel */}
  {shouldShowReplyForm && (
- <section className={fixedPanelClassName}>
+ <section className={`${floatingPanelClassName} mt-2`}>
  <div className="px-4 py-3">
  <ReplyForm
  postId={post.id}
@@ -189,6 +188,7 @@ const PostPage = async ({ params }: PostPageProps): Promise<React.ReactElement> 
  </div>
  </section>
  )}
+ </div>
  </>
  );
 };

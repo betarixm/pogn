@@ -19,7 +19,9 @@ import {
   parseActiveLayerIdsFromHash,
 } from "@/app/posts/layer-filter-hash";
 
-const PostMap = dynamic(() => import("@/app/components/post-map"), { ssr: false });
+const PostMap = dynamic(() => import("@/app/components/post-map"), {
+  ssr: false,
+});
 
 // PANEL_BOTTOM_* matches the `animate={{ bottom }}` values in the floating container.
 // FILTER_BANNER_HEIGHT ≈ PANEL_BOTTOM_FILTERED - PANEL_BOTTOM_DEFAULT (41px).
@@ -32,7 +34,7 @@ const DETAIL_PANEL_BOTTOM_FILTERED =
 // Tailwind md breakpoint (px)
 const MD_BREAKPOINT = 768;
 // Mobile floating panel height as a fraction of viewport height
-const MOBILE_PANEL_HEIGHT_RATIO = 0.65;
+const MOBILE_PANEL_HEIGHT_RATIO = 0.9;
 // Desktop sidebar: inset-x-3 (12px) + w-80 (320px)
 const SIDEBAR_LEFT_INSET = 332;
 const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -97,7 +99,10 @@ const computeMapInsets = (
     return {
       top: 0,
       right: 0,
-      bottom: viewportHeight * MOBILE_PANEL_HEIGHT_RATIO + panelBottom + safeAreaInsetBottom,
+      bottom:
+        viewportHeight * MOBILE_PANEL_HEIGHT_RATIO +
+        panelBottom +
+        safeAreaInsetBottom,
       left: 0,
     };
   }
@@ -273,7 +278,12 @@ const PostsMapShell = ({
         safeAreaInsetBottom,
       ),
     );
-  }, [isFilterBannerVisible, viewportHeight, viewportWidth, safeAreaInsetBottom]);
+  }, [
+    isFilterBannerVisible,
+    viewportHeight,
+    viewportWidth,
+    safeAreaInsetBottom,
+  ]);
 
   const checkForNewPosts = useCallback(async (): Promise<void> => {
     const snapshot = feedSnapshotRef.current;
@@ -299,7 +309,11 @@ const PostsMapShell = ({
   }, [checkForNewPosts]);
 
   const isMobileViewport = viewportWidth < MD_BREAKPOINT;
-  const mobilePanelHeight = Math.max(Math.round(viewportHeight * MOBILE_PANEL_HEIGHT_RATIO), 280);
+  const isMobilePostDetail = isMobileViewport && panelKey === "post-detail";
+  const mobilePanelHeight = Math.max(
+    Math.round(viewportHeight * MOBILE_PANEL_HEIGHT_RATIO),
+    280,
+  );
   const panelBottomDefault =
     panelKey === "post-detail"
       ? DETAIL_PANEL_BOTTOM_DEFAULT
@@ -311,20 +325,25 @@ const PostsMapShell = ({
   const shouldApplyMobileSafeAreaOffset =
     panelKey !== "post-detail" || isFilterBannerVisible;
   const shouldReduceMobilePanelHeightForFilter = panelKey !== "post-detail";
-  const floatingPanelBottom =
-    (isFilterBannerVisible ? panelBottomFiltered : panelBottomDefault) +
-    (isMobileViewport && shouldApplyMobileSafeAreaOffset ? safeAreaInsetBottom : 0);
+  const floatingPanelBottom = isMobilePostDetail
+    ? 0
+    : (isFilterBannerVisible ? panelBottomFiltered : panelBottomDefault) +
+      (isMobileViewport && shouldApplyMobileSafeAreaOffset
+        ? safeAreaInsetBottom
+        : 0);
   const floatingPanelDesktopHeight = Math.max(
     viewportHeight - 24 - (isFilterBannerVisible ? FILTER_BANNER_HEIGHT : 0),
     320,
   );
-  const floatingPanelMobileHeight = Math.max(
-    mobilePanelHeight -
-      (isFilterBannerVisible && shouldReduceMobilePanelHeightForFilter
-        ? FILTER_BANNER_HEIGHT
-        : 0),
-    240,
-  );
+  const floatingPanelMobileHeight = isMobilePostDetail
+    ? viewportHeight
+    : Math.max(
+        mobilePanelHeight -
+          (isFilterBannerVisible && shouldReduceMobilePanelHeightForFilter
+            ? FILTER_BANNER_HEIGHT
+            : 0),
+        240,
+      );
   const floatingPanelAnimate: { bottom: number; height: number } =
     isMobileViewport
       ? { bottom: floatingPanelBottom, height: floatingPanelMobileHeight }
@@ -452,8 +471,12 @@ const PostsMapShell = ({
       {username !== null && (
         <motion.div
           className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-end"
-          initial={prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
-          animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+          initial={
+            prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }
+          }
+          animate={
+            prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }
+          }
           transition={{ duration: 0.45, ease: EASE_OUT }}
         >
           <div className="pointer-events-auto">
@@ -470,15 +493,25 @@ const PostsMapShell = ({
         {newPostCount > 0 && panelKey === "post-list" && (
           <motion.div
             className="pointer-events-none absolute inset-x-3 top-3 z-20 flex justify-center md:left-[344px] md:right-3 md:justify-start"
-            initial={prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
-            animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-            exit={prefersReducedMotion ? undefined : { opacity: 0, y: -8, scale: 0.98 }}
+            initial={
+              prefersReducedMotion ? false : { opacity: 0, y: -8, scale: 0.98 }
+            }
+            animate={
+              prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }
+            }
+            exit={
+              prefersReducedMotion
+                ? undefined
+                : { opacity: 0, y: -8, scale: 0.98 }
+            }
             transition={SPRING_ITEM}
           >
             <motion.button
               type="button"
               onClick={handleRefreshFeed}
-              whileHover={prefersReducedMotion ? undefined : { y: -1, scale: 1.01 }}
+              whileHover={
+                prefersReducedMotion ? undefined : { y: -1, scale: 1.01 }
+              }
               whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
               transition={SPRING_ITEM}
               className="glass pointer-events-auto flex items-center gap-2 rounded-full border border-postech-400/35 bg-zinc-900/72 px-3 py-2 text-xs text-postech-100 backdrop-blur-xl backdrop-saturate-200"
@@ -563,10 +596,22 @@ const PostsMapShell = ({
           {panelKey === "post-detail" && (
             <motion.div
               key="post-detail"
-              className="pointer-events-auto flex min-h-0 flex-1 flex-col gap-2 overflow-hidden pb-[env(safe-area-inset-bottom,0px)] md:pb-0"
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
-              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              className="pointer-events-auto flex min-h-0 flex-1 flex-col"
+              initial={
+                prefersReducedMotion
+                  ? false
+                  : { opacity: 0, y: 16, scale: 0.985 }
+              }
+              animate={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 1, y: 0, scale: 1 }
+              }
+              exit={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 0, y: 12, scale: 0.992 }
+              }
               transition={SPRING_ITEM}
             >
               {children}
@@ -576,10 +621,22 @@ const PostsMapShell = ({
           {panelKey === "user-profile" && (
             <motion.div
               key="user-profile"
-              className="flex min-h-0 flex-1 flex-col gap-2"
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
-              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              className="flex min-h-0 flex-1 flex-col"
+              initial={
+                prefersReducedMotion
+                  ? false
+                  : { opacity: 0, y: 16, scale: 0.985 }
+              }
+              animate={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 1, y: 0, scale: 1 }
+              }
+              exit={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 0, y: 12, scale: 0.992 }
+              }
               transition={SPRING_ITEM}
             >
               {children}
@@ -590,9 +647,21 @@ const PostsMapShell = ({
             <motion.div
               key="write-form"
               className="glass pointer-events-auto mt-auto max-h-full overflow-y-auto rounded-2xl border border-white/10 bg-white/55 backdrop-blur-xl backdrop-saturate-200 md:mt-0 bg-zinc-900/45"
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
-              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              initial={
+                prefersReducedMotion
+                  ? false
+                  : { opacity: 0, y: 16, scale: 0.985 }
+              }
+              animate={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 1, y: 0, scale: 1 }
+              }
+              exit={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 0, y: 12, scale: 0.992 }
+              }
               transition={SPRING_ITEM}
             >
               <WritePostPanel
@@ -610,9 +679,21 @@ const PostsMapShell = ({
             <motion.div
               key="post-list"
               className="flex min-h-0 flex-1 flex-col gap-2"
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 16, scale: 0.985 }}
-              animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-              exit={prefersReducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.992 }}
+              initial={
+                prefersReducedMotion
+                  ? false
+                  : { opacity: 0, y: 16, scale: 0.985 }
+              }
+              animate={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 1, y: 0, scale: 1 }
+              }
+              exit={
+                prefersReducedMotion
+                  ? undefined
+                  : { opacity: 0, y: 12, scale: 0.992 }
+              }
               transition={SPRING_ITEM}
             >
               {/* Post list */}
@@ -657,9 +738,13 @@ const PostsMapShell = ({
                       title={layer.description}
                       onClick={() => toggleLayer(layer.id)}
                       whileHover={
-                        prefersReducedMotion ? undefined : { y: -1.5, scale: active ? 1.01 : 1.035 }
+                        prefersReducedMotion
+                          ? undefined
+                          : { y: -1.5, scale: active ? 1.01 : 1.035 }
                       }
-                      whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+                      whileTap={
+                        prefersReducedMotion ? undefined : { scale: 0.97 }
+                      }
                       transition={SPRING_ITEM}
                       className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                         active
@@ -676,12 +761,14 @@ const PostsMapShell = ({
           )}
 
         {/* Write CTA bar — visible on post-list */}
-        {panelKey === "post-list" && (
-          isAuthenticated ? (
+        {panelKey === "post-list" &&
+          (isAuthenticated ? (
             <motion.button
               type="button"
               onClick={handleStartWriting}
-              whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
+              whileHover={
+                prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }
+              }
               whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
               transition={SPRING_ITEM}
               className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-postech-500/30 bg-postech-600/85 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-postech-600/95 bg-postech-700/75 hover:bg-postech-700/90"
@@ -699,7 +786,9 @@ const PostsMapShell = ({
           ) : (
             <motion.a
               href="/login"
-              whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
+              whileHover={
+                prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }
+              }
               whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
               transition={SPRING_ITEM}
               className="glass pointer-events-auto shrink-0 overflow-hidden rounded-2xl border border-postech-500/30 bg-postech-600/85 backdrop-blur-xl backdrop-saturate-200 transition-colors hover:bg-postech-600/95 bg-postech-700/75 hover:bg-postech-700/90"
@@ -713,8 +802,7 @@ const PostsMapShell = ({
                 </div>
               </div>
             </motion.a>
-          )
-        )}
+          ))}
       </motion.div>
     </div>
   );
