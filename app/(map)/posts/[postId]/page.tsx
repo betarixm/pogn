@@ -26,9 +26,13 @@ export const generateMetadata = async ({
  params,
 }: PostPageProps): Promise<Metadata> => {
  const { postId } = await params;
- const { env } = await getCloudflareContext({ async: true });
+ const [session, { env }] = await Promise.all([
+  getServerSession(),
+  getCloudflareContext({ async: true }),
+ ]);
  const database = createDatabaseClient(env.DB);
- const post = await getPostById(database, createPostId(postId), null);
+ const userId = session !== null ? createUserId(session.user.id) : null;
+ const post = await getPostById(database, createPostId(postId), userId);
 
  if (post === null) {
  return {};
