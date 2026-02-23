@@ -37,6 +37,10 @@ const createAuth = (database: AppDatabase) =>
         tenantId: process.env.MICROSOFT_TENANT_ID!,
       },
     },
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["microsoft"],
+    },
     advanced: {
       database: {
         generateId: ({ model }) => {
